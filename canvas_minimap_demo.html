@@ -38,12 +38,22 @@
       bottom: 10px;
       right: 10px;
     }
+    #customCursor {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid red; /* 외곽선 스타일 */
+      border-radius: 50%;
+      pointer-events: none; /* 커서 요소가 클릭 이벤트에 영향을 주지 않도록 설정 */
+      z-index: 1000; /* 커서가 다른 요소 위에 표시되도록 설정 */
+    }
   </style>
 </head>
 <body>
   <div id="mainContainer">
     <canvas id="mainView"></canvas>
     <canvas id="shapeCanvas"></canvas>
+    <div id="customCursor"></div>
   </div>
   <canvas id="miniView" width="150" height="150"></canvas>
 
@@ -54,6 +64,12 @@
     const shapeCtx = shapeCanvas.getContext('2d');
     const miniView = document.getElementById('miniView');
     const miniCtx = miniView.getContext('2d');
+    const customCursor = document.getElementById('customCursor');
+
+    document.addEventListener('mousemove', (event) => {
+      customCursor.style.left = `${event.clientX}px`;
+      customCursor.style.top = `${event.clientY}px`;
+    });
 
     const shapes = [
       { x: 100, y: 100, size: 50, color: 'red', isDragging: false },
@@ -194,17 +210,19 @@
       const x = (event.clientX - rect.left) * (mainViewSize / monitorSize);
       const y = (event.clientY - rect.top) * (mainViewSize / monitorSize);
 
-      isDraggingMainView = true;
-      startX = event.clientX;
-      startY = event.clientY;
-
-      shapes.forEach(shape => {
-        if (x >= shape.x && x <= shape.x + shape.size && y >= shape.y && y <= shape.y + shape.size) {
-          shape.isDragging = true;
-          isDraggingShape = true;
-          isDraggingMainView = false;
-        }
-      });
+      if (event.button === 0) {
+        shapes.forEach(shape => {
+          if (x >= shape.x && x <= shape.x + shape.size && y >= shape.y && y <= shape.y + shape.size) {
+            shape.isDragging = true;
+            isDraggingShape = true;
+            isDraggingMainView = false;
+          }
+        });
+      } else if (event.button === 2) {
+        isDraggingMainView = true;
+        startX = event.clientX;
+        startY = event.clientY;
+      }
     });
 
     shapeCanvas.addEventListener('mouseup', () => {
