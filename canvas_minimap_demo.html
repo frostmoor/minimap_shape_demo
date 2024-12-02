@@ -2,15 +2,35 @@
 <html>
 <head>
   <style>
-    #mainView {
-      border: 1px solid black;
-      width: 1700px; /* 화면에 표시되는 크기 */
-      height: 1700px; /* 화면에 표시되는 크기 */
-      overflow: hidden; /* 스크롤 바 제거 */
-      cursor: grab; /* 마우스 커서 변경 */
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
     }
-    #mainView:active {
-      cursor: grabbing; /* 드래그 중 커서 변경 */
+    #mainContainer {
+      position: relative;
+      width: 1700px;
+      height: 100%;
+      border: 1px solid black;
+      overflow: hidden;
+      cursor: grab;
+    }
+    #mainContainer:active {
+      cursor: grabbing;
+    }
+    #mainView {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #shapeCanvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
     }
     #miniView {
       border: 1px solid black;
@@ -21,12 +41,17 @@
   </style>
 </head>
 <body>
-  <canvas id="mainView" width="3000" height="3000"></canvas>
+  <div id="mainContainer">
+    <canvas id="mainView"></canvas>
+    <canvas id="shapeCanvas"></canvas>
+  </div>
   <canvas id="miniView" width="150" height="150"></canvas>
 
   <script>
     const mainView = document.getElementById('mainView');
     const mainCtx = mainView.getContext('2d');
+    const shapeCanvas = document.getElementById('shapeCanvas');
+    const shapeCtx = shapeCanvas.getContext('2d');
     const miniView = document.getElementById('miniView');
     const miniCtx = miniView.getContext('2d');
 
@@ -36,10 +61,26 @@
     ];
 
     const mainViewSize = 3000;
-    const monitorSize = 1700;
-    const redBoxSize = (monitorSize / mainViewSize) * miniView.width;
+    const monitorSize = 1900;
 
-    const redBox = { x: 0, y: 0, size: redBoxSize, isDragging: false };
+    function getRedBoxDimensions() {
+      const redBoxWidth = (monitorSize / mainViewSize) * miniView.width + 40;
+      const redBoxHeight = ((monitorSize / mainViewSize) * miniView.height) -20 ;
+      return { width: redBoxWidth, height: redBoxHeight };
+    }
+
+    let { width: redBoxWidth, height: redBoxHeight } = getRedBoxDimensions();
+
+    const redBox = { x: 0, y: 0, width: redBoxWidth, height: redBoxHeight, isDragging: false };
+
+    function resizeCanvas() {
+      mainView.width = mainContainer.clientWidth;
+      mainView.height = mainContainer.clientHeight;
+      shapeCanvas.width = mainContainer.clientWidth;
+      shapeCanvas.height = mainContainer.clientHeight;
+      drawMiniView();
+      updateMainView();
+    }
 
     function drawShapes(ctx, scale = 1) {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -54,18 +95,18 @@
       drawShapes(miniCtx, miniView.width / mainViewSize);
 
       miniCtx.strokeStyle = 'red';
-      miniCtx.strokeRect(redBox.x, redBox.y, redBox.size, redBox.size);
+      miniCtx.strokeRect(redBox.x, redBox.y, redBox.width, redBox.height);
     }
 
     function updateRedBoxPositionByMainView(dx, dy) {
       const scale = miniView.width / mainViewSize;
-      redBox.x = Math.max(0, Math.min(redBox.x - dx * scale, miniView.width - redBox.size));
-      redBox.y = Math.max(0, Math.min(redBox.y - dy * scale, miniView.height - redBox.size));
+      redBox.x = Math.max(0, Math.min(redBox.x - dx * scale, miniView.width - redBox.width));
+      redBox.y = Math.max(0, Math.min(redBox.y - dy * scale, miniView.height - redBox.height));
     }
 
     function updateRedBoxPosition(x, y) {
-      redBox.x = Math.max(0, Math.min(x, miniView.width - redBox.size));
-      redBox.y = Math.max(0, Math.min(y, miniView.height - redBox.size));
+      redBox.x = Math.max(0, Math.min(x, miniView.width - redBox.width));
+      redBox.y = Math.max(0, Math.min(y, miniView.height - redBox.height));
     }
 
     function updateMainView() {
@@ -77,11 +118,18 @@
       mainCtx.save();
       mainCtx.scale(monitorSize / mainViewSize, monitorSize / mainViewSize);
       mainCtx.translate(-viewX, -viewY);
-      drawShapes(mainCtx);
       mainCtx.restore();
+
+      shapeCtx.clearRect(0, 0, shapeCanvas.width, shapeCanvas.height);
+      shapeCtx.save();
+      shapeCtx.scale(monitorSize / mainViewSize, monitorSize / mainViewSize);
+      shapeCtx.translate(-viewX, -viewY);
+      drawShapes(shapeCtx);
+      shapeCtx.restore();
     }
 
-    let isDragging = false;
+    let isDraggingMainView = false;
+    let isDraggingShape = false;
     let startX, startY;
 
     miniView.addEventListener('mousedown', (event) => {
@@ -89,14 +137,15 @@
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
 
-      if (x >= redBox.x && x <= redBox.x + redBox.size && y >= redBox.y && y <= redBox.y + redBox.size) {
+      if (x >= redBox.x && x <= redBox.x + redBox.width && y >= redBox.y && y <= redBox.y + redBox.height) {
         redBox.isDragging = true;
       }
     });
 
     document.addEventListener('mouseup', () => {
       redBox.isDragging = false;
-      isDragging = false;
+      isDraggingMainView = false;
+      isDraggingShape = false;
     });
 
     document.addEventListener('mousemove', (event) => {
@@ -110,7 +159,7 @@
         updateMainView();
       }
 
-      if (isDragging) {
+      if (isDraggingMainView) {
         const dx = (event.clientX - startX);
         const dy = (event.clientY - startY);
 
@@ -121,20 +170,53 @@
         drawMiniView();
         updateMainView();
       }
+
+      if (isDraggingShape) {
+        const rect = shapeCanvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * (mainViewSize / monitorSize);
+        const y = (event.clientY - rect.top) * (mainViewSize / monitorSize);
+
+        shapes.forEach(shape => {
+          if (shape.isDragging) {
+            shape.x = Math.min(mainViewSize - shape.size, Math.max(0, x - shape.size / 2));
+            shape.y = Math.min(mainViewSize - shape.size, Math.max(0, y - shape.size / 2));
+          }
+        });
+
+        drawShapes(shapeCtx);
+        drawMiniView();
+        updateMainView();
+      }
     });
 
-    mainView.addEventListener('mousedown', (event) => {
-      isDragging = true;
+    shapeCanvas.addEventListener('mousedown', (event) => {
+      const rect = shapeCanvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * (mainViewSize / monitorSize);
+      const y = (event.clientY - rect.top) * (mainViewSize / monitorSize);
+
+      isDraggingMainView = true;
       startX = event.clientX;
       startY = event.clientY;
+
+      shapes.forEach(shape => {
+        if (x >= shape.x && x <= shape.x + shape.size && y >= shape.y && y <= shape.y + shape.size) {
+          shape.isDragging = true;
+          isDraggingShape = true;
+          isDraggingMainView = false;
+        }
+      });
     });
 
-    mainView.addEventListener('mouseup', () => {
-      isDragging = false;
+    shapeCanvas.addEventListener('mouseup', () => {
+      isDraggingMainView = false;
+      isDraggingShape = false;
+      shapes.forEach(shape => {
+        shape.isDragging = false;
+      });
     });
 
-    drawShapes(mainCtx);
-    drawMiniView();
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
   </script>
 </body>
 </html>
